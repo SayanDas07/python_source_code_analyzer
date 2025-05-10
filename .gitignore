@@ -1,0 +1,48 @@
+# Ignore vector database directory
+db/
+
+# Ignore cloned repository directory
+repo/
+
+research/test_repo
+
+# Python-specific ignores
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+ENV/
+.env
+
+# Logs
+*.log
+app.log
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
