@@ -11,23 +11,34 @@
 
 1. Clone this repository:
    ```
-   git clone https://github.com/SayanDas07/source_code_analyzer(https://github.com/SayanDas07/source_code_analyzer)
+   git clone https://github.com/SayanDas07/source_code_analyzer
+   ```
+   ```
    cd source_code_analyzer
    ```
 
 2. Create a virtual environment and install dependencies:
    ```
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+   #### On Linux/WSL:
+   ```
+   source venv/bin/activate
+   ```
+   #### On Windows:
+   ```
+   venv\Scripts\activate
+   ```
+   ```
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file with your API keys:
+4. Create a `.env` file with your API keys:
    ```
    GOOGLE_API_KEY=your_google_api_key_here
    ```
 
-4. Run the application:
+5. Run the application:
    ```
    streamlit run app.py
    ```
