@@ -2,70 +2,81 @@
 
 <div align="center">
   
-  ![GitHub Repository Analyzer](https://img.shields.io/badge/Tool-Repository%20Analyzer-blue)
-  ![Python](https://img.shields.io/badge/Python-3.8+-green)
-  ![LangChain](https://img.shields.io/badge/LangChain-Enabled-orange)
-  ![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
+![GitHub Repository Analyzer](https://img.shields.io/badge/Tool-Repository%20Analyzer-blue)
+![Python](https://img.shields.io/badge/Python-3.8+-green)
+![LangChain](https://img.shields.io/badge/LangChain-Enabled-orange)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
   
 </div>
 
+## 📊 Overview
+
+This tool allows you to analyze GitHub repositories by creating vector embeddings of code and enabling natural language queries about the codebase of .py files. Built with LangChain, google gen ai and Streamlit, it provides an intuitive interface for developers to understand complex repositories.
+
 ## 🚀 Features
 
-- 📊 Analyze GitHub repositories
+- 📂 Clone and analyze any public GitHub repository
 - 🔍 Create vector embeddings of repository code
 - 💬 Ask questions about the code using natural language
 - 🧠 Conversational memory to maintain context across questions
+- 🤖 Powered by Google's Gemini-1.5-flash model
 
-## 🛠️ Setup
+## 🛠️ Installation & Setup
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/SayanDas07/source_code_analyzer
-   cd source_code_analyzer
-   ```
+### Prerequisites
+- Python 3.10+
+- Google API key from Google AI Studio
 
-2. Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   ```
-   
-   **On Linux/WSL:**
-   ```bash
-   source venv/bin/activate
-   ```
-   
-   **On Windows:**
-   ```bash
-   venv\Scripts\activate
-   ```
-   
-   **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Step 1: Clone the repository
+```bash
+git clone https://github.com/SayanDas07/source_code_analyzer
+cd source_code_analyzer
+```
 
-3. Create a `.env` file with your API keys:
-   ```
-   GOOGLE_API_KEY=your_google_api_key_here
-   ```
+### Step 2: Create and activate virtual environment
 
-4. Run the application:
-   ```bash
-   streamlit run app.py
-   ```
+**On Linux/WSL:**
+```bash
+python -m venv venv
+source venv/bin/activate
+```
 
-## 📝 Usage
+**On Windows:**
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### Step 3: Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Step 4: Configure environment variables
+Create a `.env` file in the root directory:
+```
+GOOGLE_API_KEY=your_google_api_key_here
+```
+
+### Step 5: Launch the application
+```bash
+streamlit run app.py
+```
+
+## 📝 Usage Guide
 
 1. Enter a GitHub repository URL in the sidebar
 2. Click "Load Repository" to clone and process the repository
-3. Ask questions about the code in the chat interface
+3. Once processing is complete, use the chat interface to ask questions about the code
+4. The AI will respond with contextually relevant information about the python codes of that Repository.
 
 ## 🌐 Live Demo
 
-You can check out a live demo of this project at: [https://python-source-code-analyzer.onrender.com/](https://python-source-code-analyzer.onrender.com/)
+Try the live demo at: [https://python-source-code-analyzer.onrender.com/](https://python-source-code-analyzer.onrender.com/)
 
-> **Note:** The demo is deployed on Render's free instance, so there might be some issues due to deployment limitations. In case of problems, we recommend running the project locally using the steps above and using the provided app.py code below.
-```
+> **Note:** The demo is deployed on Render's free tier, which has certain limitations. If you encounter issues (such as persistent database effects when clearing repositories), consider waiting for the database to reset or running the project locally using the instructions above and change the current app.py to this below code :
+
+```python
 import streamlit as st
 import os
 import sys
@@ -369,4 +380,21 @@ if os.path.exists("db") and os.path.exists("repo"):
     if dir_contents:
         if initialize_llm() and initialize_vectordb():
             st.session_state.repo_loaded = True
-            ```
+```
+
+
+## 💻 Implementation Details
+
+The application is built with:
+- **Streamlit**: Provides the user interface
+- **LangChain**: Manages the conversational chain and retrieval system
+- **Google Generative AI**: Powers the language understanding capabilities
+- **Chroma DB**: Stores and retrieves vector embeddings
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## 👨‍💻 Contributing
+
+Contributions are welcome! Feel free to open issues or submit pull requests to help improve this tool.
