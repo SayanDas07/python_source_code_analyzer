@@ -110,63 +110,45 @@ def initialize_vectordb():
         return False
 
 def clear_repo():
-    """Clear the repository and database directories without deleting them"""
+    """Clear the repository and database directories"""
     try:
         cleared = False
-        
-        # Instead of removing entire directories, clear their contents
+       
         if os.path.exists("repo"):
             try:
-                logger.debug("Clearing repository directory contents")
-                for item in os.listdir("repo"):
-                    item_path = os.path.join("repo", item)
-                    if os.path.isfile(item_path):
-                        os.unlink(item_path)
-                    elif os.path.isdir(item_path):
-                        shutil.rmtree(item_path)
-                logger.info("Cleared repository directory contents")
+                logger.debug("Removing repository directory")
+                shutil.rmtree("repo")
+                logger.info("Removed repository directory")
                 cleared = True
             except Exception as rm_error:
-                logger.error(f"Failed to clear repo directory contents: {str(rm_error)}")
+                logger.error(f"Failed to remove repo directory: {str(rm_error)}")
                 logger.error(traceback.format_exc())
-                st.error("Failed to clear repository directory contents")
+                st.error("Failed to clear repository directory")
                 return False
-        else:
-            # Create if it doesn't exist
-            try:
-                os.makedirs("repo", exist_ok=True)
-                cleared = True
-            except Exception as mk_error:
-                logger.error(f"Failed to create repo directory: {str(mk_error)}")
-                return False
+        
 
         if os.path.exists("db"):
             try:
-                logger.debug("Clearing vector database directory contents")
-                for item in os.listdir("db"):
-                    item_path = os.path.join("db", item)
-                    if os.path.isfile(item_path):
-                        os.unlink(item_path)
-                    elif os.path.isdir(item_path):
-                        shutil.rmtree(item_path)
-                logger.info("Cleared vector database directory contents")
+                logger.debug("Removing vector database directory")
+                shutil.rmtree("db")
+                logger.info("Removed vector database directory")
                 cleared = True
             except Exception as rm_error:
-                logger.error(f"Failed to clear db directory contents: {str(rm_error)}")
+                logger.error(f"Failed to remove db directory: {str(rm_error)}")
                 logger.error(traceback.format_exc())
-                st.error("Failed to clear vector database directory contents")
-                return False
-        else:
-            # Create if it doesn't exist
-            try:
-                os.makedirs("db", exist_ok=True)
-                cleared = True
-            except Exception as mk_error:
-                logger.error(f"Failed to create db directory: {str(mk_error)}")
+                st.error("Failed to clear vector database directory")
                 return False
         
         st.session_state.vectordb = None
         st.session_state.qa = None
+        
+
+        try:
+            os.makedirs("db", exist_ok=True)
+            os.makedirs("repo", exist_ok=True)
+        except Exception as mk_error:
+            logger.warning(f"Failed to create empty directories: {str(mk_error)}")
+            st.warning("Failed to create empty directories")
         
         return True
     except Exception as clear_error:
