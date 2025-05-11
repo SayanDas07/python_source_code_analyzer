@@ -4,11 +4,21 @@ import sys
 import traceback
 import logging
 import shutil
+import time
+import gc
 from langchain.vectorstores import Chroma
 from langchain.memory import ConversationSummaryMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
+
+# Try to import psutil for more aggressive resource cleanup
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logging.warning("psutil not installed - some advanced cleanup features unavailable")
 
 
 from src.helper import load_embedding, repo_ingestion
@@ -97,24 +107,62 @@ def initialize_vectordb():
                 # Try to force close the connection if possible
                 if hasattr(st.session_state.vectordb, '_client'):
                     st.session_state.vectordb._client = None
+                if hasattr(st.session_state.vectordb, '_collection'):
+                    st.session_state.vectordb._collection = None
                 st.session_state.vectordb = None
             except Exception as close_error:
                 logger.warning(f"Error while closing existing vector database: {str(close_error)}")
+        
+        # Force garbage collection to clean up any lingering references
+        import gc
+        st.session_state.qa = None
+        gc.collect()
 
-        # Create a new Chroma instance
-        st.session_state.vectordb = Chroma(
-            persist_directory=persist_directory, 
-            embedding_function=embeddings
-        )
-        
-        st.session_state.qa = ConversationalRetrievalChain.from_llm(
-            st.session_state.llm, 
-            retriever=st.session_state.vectordb.as_retriever(search_type="mmr", search_kwargs={"k":8}), 
-            memory=st.session_state.memory
-        )
-        
-        logger.info("Vector database and QA components initialized successfully")
-        return True
+        # Create a new Chroma instance with a fresh client
+        try:
+            st.session_state.vectordb = Chroma(
+                persist_directory=persist_directory, 
+                embedding_function=embeddings
+            )
+            
+            st.session_state.qa = ConversationalRetrievalChain.from_llm(
+                st.session_state.llm, 
+                retriever=st.session_state.vectordb.as_retriever(search_type="mmr", search_kwargs={"k":8}), 
+                memory=st.session_state.memory
+            )
+            
+            logger.info("Vector database and QA components initialized successfully")
+            return True
+        except Exception as chroma_error:
+            logger.error(f"Error creating Chroma instance: {str(chroma_error)}")
+            logger.error(traceback.format_exc())
+            
+            # Try with a clean memory approach as a fallback
+            try:
+                logger.debug("Trying alternative initialization approach")
+                # Reset memory to ensure clean state
+                st.session_state.memory = ConversationSummaryMemory(
+                    llm=st.session_state.llm,
+                    memory_key="chat_history",
+                    return_messages=True
+                )
+                
+                st.session_state.vectordb = Chroma(
+                    persist_directory=persist_directory, 
+                    embedding_function=embeddings
+                )
+                
+                st.session_state.qa = ConversationalRetrievalChain.from_llm(
+                    st.session_state.llm, 
+                    retriever=st.session_state.vectordb.as_retriever(search_type="mmr", search_kwargs={"k":8}), 
+                    memory=st.session_state.memory
+                )
+                
+                logger.info("Vector database and QA components initialized with fallback method")
+                return True
+            except Exception as fallback_error:
+                logger.error(f"Even fallback initialization failed: {str(fallback_error)}")
+                return False
     except Exception as e:
         logger.error(f"Error initializing vector database: {str(e)}")
         logger.error(traceback.format_exc())
@@ -125,19 +173,59 @@ def clear_repo():
     try:
         cleared = False
         
+        # First ensure the vectordb's resources are released
+        if st.session_state.vectordb is not None:
+            try:
+                # Try to force close the connection if possible
+                if hasattr(st.session_state.vectordb, '_client'):
+                    st.session_state.vectordb._client = None
+                if hasattr(st.session_state.vectordb, '_collection'):
+                    st.session_state.vectordb._collection = None
+            except Exception as close_error:
+                logger.warning(f"Error while closing existing vector database: {str(close_error)}")
+        
         # Reset session state
         st.session_state.vectordb = None
         st.session_state.qa = None
         st.session_state.current_repo_url = None
         
+        # Reset memory to ensure clean state
+        if st.session_state.memory is not None:
+            st.session_state.memory = ConversationSummaryMemory(
+                llm=st.session_state.llm,
+                memory_key="chat_history",
+                return_messages=True
+            )
+        
         # Ensure any open connections are closed
         import gc
         gc.collect()
+        
+        # Attempt to close file handles - important on Windows and some Linux environments
+        if PSUTIL_AVAILABLE:
+            try:
+                process = psutil.Process(os.getpid())
+                for handler in process.open_files():
+                    if "db/" in handler.path or "repo/" in handler.path:
+                        try:
+                            os.close(handler.fd)
+                        except:
+                            pass
+            except:
+                # If psutil operations fail, continue with normal cleanup
+                logger.warning("Couldn't perform detailed file handle cleanup")
+        else:
+            logger.warning("psutil not available for detailed file handle cleanup")
        
         if os.path.exists("repo"):
             try:
                 logger.debug("Removing repository directory")
-                shutil.rmtree("repo")
+                # For maximum compatibility, try different removal approaches
+                try:
+                    shutil.rmtree("repo")
+                except:
+                    # Try a more aggressive approach on failure
+                    os.system("rm -rf repo")
                 logger.info("Removed repository directory")
                 cleared = True
             except Exception as rm_error:
@@ -149,7 +237,12 @@ def clear_repo():
         if os.path.exists("db"):
             try:
                 logger.debug("Removing vector database directory")
-                shutil.rmtree("db")
+                # For maximum compatibility, try different removal approaches
+                try:
+                    shutil.rmtree("db")
+                except:
+                    # Try a more aggressive approach on failure
+                    os.system("rm -rf db")
                 logger.info("Removed vector database directory")
                 cleared = True
             except Exception as rm_error:
@@ -157,6 +250,10 @@ def clear_repo():
                 logger.error(traceback.format_exc())
                 st.error("Failed to clear vector database directory")
                 return False
+        
+        # Wait a moment to ensure the filesystem has completed operations
+        import time
+        time.sleep(0.5)
         
         try:
             os.makedirs("db", exist_ok=True)
@@ -180,9 +277,16 @@ def load_repository(repo_url):
             if st.session_state.current_repo_url == repo_url and st.session_state.repo_loaded:
                 st.info("This repository is already loaded.")
                 return True
+            
+            # Store the previous repo URL to detect issues
+            previous_repo = st.session_state.current_repo_url
                 
             # PHASE 1: Clean up existing directories
             st.text("Cleaning up existing directories...")
+            
+            # First reset the repository flag to avoid race conditions
+            st.session_state.repo_loaded = False
+            
             if not clear_repo():
                 st.error("Failed to clean up existing directories")
                 return False
@@ -198,37 +302,65 @@ def load_repository(repo_url):
                 st.error(f"Failed to clone repository: {str(repo_error)}")
                 return False
             
+            # Set current repo URL immediately after successful cloning
+            st.session_state.current_repo_url = repo_url
+            
             # PHASE 3: Run indexing
             st.text("Indexing repository files...")
             try:
+                # Force a file sync before running the indexing script
+                os.sync() if hasattr(os, 'sync') else time.sleep(1)
+                
                 exit_code = os.system("python store_index.py")
                 if exit_code != 0:
                     logger.error(f"store_index.py failed with exit code {exit_code}")
                     st.error(f"Failed to process repository contents (exit code: {exit_code})")
+                    # Reset to previous state
+                    st.session_state.current_repo_url = previous_repo
                     return False
                 logger.info("Repository indexing completed successfully")
             except Exception as index_error:
                 logger.error(f"Error during indexing: {str(index_error)}")
                 logger.error(traceback.format_exc())
                 st.error(f"Failed during indexing: {str(index_error)}")
+                # Reset to previous state
+                st.session_state.current_repo_url = previous_repo
                 return False
             
             # PHASE 4: Initialize components
             st.text("Initializing components...")
             try:
+                # Force file sync again before initializing components
+                os.sync() if hasattr(os, 'sync') else time.sleep(1)
+                
                 if st.session_state.llm is None or st.session_state.memory is None:
                     if not initialize_llm():
                         st.error("Failed to initialize LLM components")
                         return False
                 
-                if not initialize_vectordb():
-                    st.error("Repository indexed but failed to initialize search capabilities")
-                    return False
-                    
-                logger.info("All components initialized successfully")
-                st.session_state.repo_loaded = True
-                st.session_state.current_repo_url = repo_url
-                return True
+                # Reset memory for the new repository
+                st.session_state.memory = ConversationSummaryMemory(
+                    llm=st.session_state.llm,
+                    memory_key="chat_history",
+                    return_messages=True
+                )
+                
+                # Wait a moment to ensure all filesystem operations are complete
+                time.sleep(0.5)
+                
+                # Try twice if needed to initialize the database
+                for attempt in range(2):
+                    if initialize_vectordb():
+                        logger.info("All components initialized successfully")
+                        st.session_state.repo_loaded = True
+                        return True
+                    else:
+                        logger.warning(f"Initialization attempt {attempt+1} failed. Retrying...")
+                        time.sleep(1)
+                        gc.collect()
+                
+                st.error("Repository indexed but failed to initialize search capabilities after multiple attempts")
+                return False
             except Exception as init_error:
                 logger.error(f"Error during component initialization: {str(init_error)}")
                 logger.error(traceback.format_exc())
