@@ -5,4 +5,4 @@ GitPython
 python-dotenv
 langchain-community
 langchain-google-genai
-
+faiss-cpu
