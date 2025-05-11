@@ -31,6 +31,9 @@ except Exception as env_error:
     logger.error(f"Error loading environment variables: {str(env_error)}")
     logger.error(traceback.format_exc())
 
+# Store the current repository URL in session state
+if 'current_repo_url' not in st.session_state:
+    st.session_state.current_repo_url = None
 if 'vectordb' not in st.session_state:
     st.session_state.vectordb = None
 if 'qa' not in st.session_state:
@@ -74,7 +77,6 @@ def initialize_vectordb():
             if not initialize_llm():
                 return False
         
-
         embeddings = load_embedding()
         persist_directory = "db"
       
@@ -89,13 +91,22 @@ def initialize_vectordb():
             
         logger.debug(f"DB directory contents: {dir_contents}")
         
+        # Force close any existing connection to the vector database
+        if st.session_state.vectordb is not None:
+            try:
+                # Try to force close the connection if possible
+                if hasattr(st.session_state.vectordb, '_client'):
+                    st.session_state.vectordb._client = None
+                st.session_state.vectordb = None
+            except Exception as close_error:
+                logger.warning(f"Error while closing existing vector database: {str(close_error)}")
 
+        # Create a new Chroma instance
         st.session_state.vectordb = Chroma(
             persist_directory=persist_directory, 
             embedding_function=embeddings
         )
         
-
         st.session_state.qa = ConversationalRetrievalChain.from_llm(
             st.session_state.llm, 
             retriever=st.session_state.vectordb.as_retriever(search_type="mmr", search_kwargs={"k":8}), 
@@ -113,6 +124,15 @@ def clear_repo():
     """Clear the repository and database directories"""
     try:
         cleared = False
+        
+        # Reset session state
+        st.session_state.vectordb = None
+        st.session_state.qa = None
+        st.session_state.current_repo_url = None
+        
+        # Ensure any open connections are closed
+        import gc
+        gc.collect()
        
         if os.path.exists("repo"):
             try:
@@ -126,7 +146,6 @@ def clear_repo():
                 st.error("Failed to clear repository directory")
                 return False
         
-
         if os.path.exists("db"):
             try:
                 logger.debug("Removing vector database directory")
@@ -139,10 +158,6 @@ def clear_repo():
                 st.error("Failed to clear vector database directory")
                 return False
         
-        st.session_state.vectordb = None
-        st.session_state.qa = None
-        
-
         try:
             os.makedirs("db", exist_ok=True)
             os.makedirs("repo", exist_ok=True)
@@ -161,6 +176,11 @@ def load_repository(repo_url):
     """Load and process a GitHub repository"""
     with st.spinner("Processing repository..."):
         try:
+            # Check if this is the same repository that's already loaded
+            if st.session_state.current_repo_url == repo_url and st.session_state.repo_loaded:
+                st.info("This repository is already loaded.")
+                return True
+                
             # PHASE 1: Clean up existing directories
             st.text("Cleaning up existing directories...")
             if not clear_repo():
@@ -196,19 +216,18 @@ def load_repository(repo_url):
             # PHASE 4: Initialize components
             st.text("Initializing components...")
             try:
-               
                 if st.session_state.llm is None or st.session_state.memory is None:
                     if not initialize_llm():
                         st.error("Failed to initialize LLM components")
                         return False
                 
-       
                 if not initialize_vectordb():
                     st.error("Repository indexed but failed to initialize search capabilities")
                     return False
                     
                 logger.info("All components initialized successfully")
                 st.session_state.repo_loaded = True
+                st.session_state.current_repo_url = repo_url
                 return True
             except Exception as init_error:
                 logger.error(f"Error during component initialization: {str(init_error)}")
@@ -266,6 +285,8 @@ with st.sidebar:
 
     st.divider()
     st.write("Status: " + ("Repository loaded" if st.session_state.repo_loaded else "No repository loaded"))
+    if st.session_state.current_repo_url:
+        st.write(f"Current repo: {st.session_state.current_repo_url}")
 
 
 st.header("Chat with your Repository")
@@ -283,7 +304,6 @@ if user_question := st.chat_input("Ask a question about the repository..." if st
     with st.chat_message("user"):
         st.write(user_question)
     
-  
     with st.chat_message("assistant"):
         if st.session_state.repo_loaded:
             response = process_question(user_question)
@@ -292,10 +312,10 @@ if user_question := st.chat_input("Ask a question about the repository..." if st
         
         st.write(response)
     
-  
     st.session_state.chat_history.append({"role": "assistant", "content": response})
 
 
+# Detect if database exists and try to initialize components
 if os.path.exists("db") and os.path.exists("repo"):
     dir_contents = os.listdir("db")
     if dir_contents:
