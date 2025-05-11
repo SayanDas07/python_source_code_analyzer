@@ -13,6 +13,10 @@
 
 This tool allows you to analyze GitHub repositories by creating vector embeddings of code and enabling natural language queries about the codebase of .py files. Built with LangChain, google gen ai and Streamlit, it provides an intuitive interface for developers to understand complex repositories.
 
+
+![image](https://github.com/user-attachments/assets/d9773f14-4ac1-4c20-b314-0e3f85cde9df)
+
+
 ## 🚀 Features
 
 - 📂 Clone and analyze any public GitHub repository
